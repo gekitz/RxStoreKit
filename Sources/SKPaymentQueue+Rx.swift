@@ -46,7 +46,7 @@ extension ReceiptError: CustomStringConvertible {
 }
 
 extension SKPaymentQueue {
-    func verifyReceipt(transaction: SKPaymentTransaction) -> Observable<SKPaymentTransaction> {
+    func verifyReceipt(transaction: SKPaymentTransaction, with itcSecret: String) -> Observable<SKPaymentTransaction> {
         #if DEBUG
             let verifyReceiptURLString = "https://sandbox.itunes.apple.com/verifyReceipt"
         #else
@@ -57,7 +57,7 @@ extension SKPaymentQueue {
             let receiptURL = Bundle.main.appStoreReceiptURL
             let data = try Data(contentsOf: receiptURL!, options: [])
             let base64 = data.base64EncodedString(options: Data.Base64EncodingOptions(rawValue: 0))
-            let json = try JSONSerialization.data(withJSONObject: ["receipt-data": base64], options: [])
+            let json = try JSONSerialization.data(withJSONObject: ["receipt-data": base64, "password": itcSecret], options: [])
             
             var request = URLRequest(url: url, cachePolicy: .reloadIgnoringCacheData)
             request.httpMethod = "POST"
@@ -77,7 +77,9 @@ extension SKPaymentQueue {
         let json = response as! [String: AnyObject]
         let state = json["status"] as! Int
         if state == 0 {
+            #if DEBUG
             print(json)
+            #endif
             let receipt = json["receipt"]!
             let inApp = receipt["in_app"] as! [[String: Any]]
             let contains = inApp.contains { element -> Bool in
@@ -126,8 +128,7 @@ extension Reactive where Base: SKPaymentQueue {
         return observable
     }
     
-    public func add(product: SKProduct,
-                    shouldVerify: Bool) -> Observable<SKPaymentTransaction> {
+    public func add(product: SKProduct, verifyWith itcSecret: String? = nil) -> Observable<SKPaymentTransaction> {
         
         let payment = SKPayment(product: product)
         
@@ -137,8 +138,8 @@ extension Reactive where Base: SKPaymentQueue {
                 .flatMapLatest({ transaction -> Observable<SKPaymentTransaction> in
                     switch transaction.transactionState {
                     case .purchased:
-                        if shouldVerify {
-                            return self.base.verifyReceipt(transaction: transaction)
+                        if let itcSecret = itcSecret {
+                            return self.base.verifyReceipt(transaction: transaction, with: itcSecret)
                         } else {
                             return Observable.of(transaction)
                         }
