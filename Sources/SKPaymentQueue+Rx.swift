@@ -143,6 +143,10 @@ extension Reactive where Base: SKPaymentQueue {
                         } else {
                             return Observable.of(transaction)
                         }
+                    case .failed:
+                        if let error = transaction.error {
+                            throw error
+                        } 
                     default: print("transaction state = \(transaction.transactionState)")
                     }
                     return Observable.of(transaction)
